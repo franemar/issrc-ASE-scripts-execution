@@ -24,7 +24,7 @@ ArchitecturesInstallIn64BitMode=x64
 
 [Files]
 Source: "C:\SAP\OCS-16_0\bin\isql64.exe"; DestDir: "{tmp}"; Flags: dontcopy
-Source: "..\..\Documents\*.sql"; DestDir: "{tmp}"; Flags: dontcopy; Attribs: readonly
+Source: "Scripts\*.sql"; DestDir: "{tmp}"; Flags: dontcopy; Attribs: readonly
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -66,6 +66,8 @@ var
   intSQLFiles: Integer;
   strExternalCommand: String;
   cstrDefaultDatabase: String;
+  FilesFound: Integer;
+  FindRec: TFindRec;
 begin
   Result              := True;
   cstrDefaultDatabase := 'fu';
@@ -83,28 +85,45 @@ begin
     end else begin
       if DBPage.Values[4] = '' then DBPage.Values[4] := cstrDefaultDatabase;
       
-      strExternalCommand := '-S' + DBPage.Values[0] + ':' + DBPage.Values[1] + ' -U' + DBPage.Values[2] + ' -P' 
-        + DBPage.Values[3] + ' -D' + DBPage.Values[4] + ' -i' + ExpandConstant('{tmp}') + '\Instalacion_2893.sql ' + 
-        ' -o' + ExpandConstant('{userdocs}') + '\Instalacion_2893.log'
+       ExtractTemporaryFile('isql64.exe');
+       intSQLFiles := ExtractTemporaryFiles('*.sql');
 
-      ExtractTemporaryFile('isql64.exe');
-      intSQLFiles := ExtractTemporaryFiles('*.sql');
+      FilesFound := 0;
+      if FindFirst(ExpandConstant('{tmp}\*.sql'), FindRec) then begin
+        try
+          repeat
+            if FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY = 0 then
+              FilesFound := FilesFound + 1;
 
+              strExternalCommand := '-S' + DBPage.Values[0] + ':' + DBPage.Values[1] + ' -U' + DBPage.Values[2] + ' -P' 
+                + DBPage.Values[3] + ' -D' + DBPage.Values[4] + ' -i' + ExpandConstant('{tmp}\') + 
+                FindRec.Name + ' -o' + ExpandConstant('{userdocs}') + '\' + FindRec.Name + '.log'
 
-      //MsgBox(strExternalCommand, mbInformation, MB_OK);
+              //MsgBox(strExternalCommand, mbInformation, MB_OK);
 
-      if Exec(ExpandConstant('{tmp}') + '\isql64.exe', strExternalCommand, '',
-        SW_HIDE, ewWaitUntilTerminated, ResultCode)
-      then begin
-        MsgBox('Database sucesfully updated:'#10#10 + SysErrorMessage(ResultCode), mbInformation, MB_OK);
-        // check ResultCode and set Result accordingly
-        Result := ResultCode = 0; 
-      end 
-      else begin
-        MsgBox('Database update failed:'#10#10 + SysErrorMessage(ResultCode),
-          mbError, MB_OK);
-        Result := False;
+              if Exec(ExpandConstant('{tmp}') + '\isql64.exe', strExternalCommand, '',
+                SW_HIDE, ewWaitUntilTerminated, ResultCode)
+              then begin
+                //MsgBox('Database sucesfully updated:'#10#10 + SysErrorMessage(ResultCode), mbInformation, MB_OK);
+                // check ResultCode and set Result accordingly
+                Result := ResultCode = 0; 
+              end 
+              else begin
+
+                MsgBox('Database update failed:'#10#10 + SysErrorMessage(ResultCode),
+                  mbError, MB_OK);
+                Result := False;
+              end;
+
+        until not FindNext(FindRec);
+        finally
+          FindClose(FindRec);
+        end;
       end;
+      if FilesFound <> intSQLFiles then
+      MsgBox(IntToStr(FilesFound) + ' file(s) found in the System directory, ' +
+         IntToStr(intSQLFiles) + ' file(s) decompressed in Temp directory.' ,
+        mbInformation, MB_OK);
     end;
   end;
 end;
